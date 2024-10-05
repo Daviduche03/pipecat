@@ -90,6 +90,7 @@ class AzureTTSService(TTSService):
         voice="en-US-SaraNeural",
         sample_rate: int = 16000,
         params: InputParams = InputParams(),
+        my_callbackcallback: Optional[callable] = None,
         **kwargs,
     ):
         super().__init__(sample_rate=sample_rate, **kwargs)
@@ -112,6 +113,7 @@ class AzureTTSService(TTSService):
         }
 
         self.set_voice(voice)
+        self.callback = callback
 
     def can_generate_metrics(self) -> bool:
         return True
@@ -251,6 +253,9 @@ class AzureTTSService(TTSService):
 
     async def run_tts(self, text: str) -> AsyncGenerator[Frame, None]:
         logger.debug(f"Generating TTS: [{text}]")
+        
+        if self.callback:
+            self.callback(text)
 
         await self.start_ttfb_metrics()
 
