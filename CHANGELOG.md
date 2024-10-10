@@ -5,9 +5,22 @@ All notable changes to **Pipecat** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.0.43] - 2024-10-03
+## [Unreleased]
+
+### Added
+
+- Added `MarkdownRemovalProcessor`. This processor removes markdown formatting
+  from a TextFrame. It's intended to be used between the LLM and TTS in order
+  to remove markdown from the text the TTS speaks.
+
+- Added new `RTVIUserLLMTextProcessor`. This processor will send an RTVI
+  `user-llm-text` message with the user content's that was sent to the LLM.
 
 ### Changed
+
+- `TransportMessageFrame` doesn't have an `urgent` field anymore, instead
+  there's now a `TransportMessageUrgentFrame` which is a `SystemFrame` and
+  therefore skip all internal queuing.
 
 - For TTS services, convert inputted languages to match each service's language
   format
