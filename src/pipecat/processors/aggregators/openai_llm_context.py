@@ -75,14 +75,14 @@ class OpenAILLMContext:
         return context
 
     @staticmethod
-    def from_image_frame(frame: VisionImageRawFrame) -> "OpenAILLMContext":
+    def from_image_frame(frame: VisionImageRawFrame, messages) -> "OpenAILLMContext":
         """
         For images, we are deviating from the OpenAI messages shape. OpenAI
         expects images to be base64 encoded, but other vision models may not.
         So we'll store the image as bytes and do the base64 encoding as needed
         in the LLM service.
         """
-        context = OpenAILLMContext()
+        context = OpenAILLMContext(messages=messages)
         buffer = io.BytesIO()
         Image.frombytes(frame.format, frame.size, frame.image).save(buffer, format="JPEG")
         context.add_message(
@@ -116,6 +116,21 @@ class OpenAILLMContext:
 
     def get_messages_json(self) -> str:
         return json.dumps(self._messages, cls=CustomEncoder, ensure_ascii=False, indent=2)
+    
+    # def from_image_frame(self, frame: VisionImageRawFrame) -> "OpenAILLMContext":
+    #     """
+    #     For images, we are deviating from the OpenAI messages shape. OpenAI
+    #     expects images to be base64 encoded, but other vision models may not.
+    #     So we'll store the image as bytes and do the base64 encoding as needed
+    #     in the LLM service.
+    #     """
+    #     context = OpenAILLMContext()
+    #     buffer = io.BytesIO()
+    #     Image.frombytes(frame.format, frame.size, frame.image).save(buffer, format="JPEG")
+    #     context.add_message(
+    #         {"content": frame.text, "role": "user", "data": buffer, "mime_type": "image/jpeg"}
+    #     )
+    #     return context
 
     def get_messages_for_logging(self) -> str:
         msgs = []
@@ -143,6 +158,7 @@ class OpenAILLMContext:
     def add_image_frame_message(
         self, *, format: str, size: tuple[int, int], image: bytes, text: str = None
     ):
+        print(len(self.messages), "!!!!!!!!!!!!!!!!!!!")
         buffer = io.BytesIO()
         Image.frombytes(format, size, image).save(buffer, format="JPEG")
         encoded_image = base64.b64encode(buffer.getvalue()).decode("utf-8")

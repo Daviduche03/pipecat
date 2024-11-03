@@ -575,10 +575,11 @@ class DailyTransportClient(EventHandler):
 
 
 class DailyInputTransport(BaseInputTransport):
-    def __init__(self, client: DailyTransportClient, params: DailyParams, **kwargs):
+    def __init__(self, context, client: DailyTransportClient, params: DailyParams, **kwargs):
         super().__init__(params, **kwargs)
 
         self._client = client
+        self._context = context
 
         self._video_renderers = {}
 
@@ -707,7 +708,7 @@ class DailyInputTransport(BaseInputTransport):
 
         if render_frame:
             frame = UserImageRawFrame(
-                user_id=participant_id, image=buffer, size=size, format=format
+                user_id=participant_id, image=buffer, size=size, format=format, context=self._context
             )
             await self.push_frame(frame)
 
@@ -783,6 +784,7 @@ class DailyTransport(BaseTransport):
         room_url: str,
         token: str | None,
         bot_name: str,
+        context,
         params: DailyParams = DailyParams(),
         input_name: str | None = None,
         output_name: str | None = None,
@@ -814,6 +816,7 @@ class DailyTransport(BaseTransport):
         )
         self._input: DailyInputTransport | None = None
         self._output: DailyOutputTransport | None = None
+        self._context = context
 
         # Register supported handlers. The user will only be able to register
         # these handlers.
@@ -838,7 +841,7 @@ class DailyTransport(BaseTransport):
 
     def input(self) -> DailyInputTransport:
         if not self._input:
-            self._input = DailyInputTransport(self._client, self._params, name=self._input_name)
+            self._input = DailyInputTransport( self._context, self._client, self._params, name=self._input_name)
         return self._input
 
     def output(self) -> DailyOutputTransport:

@@ -42,6 +42,7 @@ import random
 import string
 from pipecat.processors.aggregators.vision_image_frame import VisionImageFrameAggregator
 
+from pipecat.services.anthropic import AnthropicLLMService
 import logging
 
 # Load environment variables
@@ -115,30 +116,12 @@ async def run_bot(room_url, token, bot_name, room_id):
         # Run the main function of the tools
         
         writing_tool.main()
-        # vision_tool.main()
-
-        # Create the DailyTransport with the provided room URL, token, and bot name
-        transport = DailyTransport(
-            room_url,
-            token,
-            bot_name,
-            DailyParams(
-                audio_out_enabled=True,
-                transcription_enabled=True,
-                vad_enabled=True,
-                vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.2))
-            )
-        )
-
-        # room_id = "test_room"
-
         async def my_callback(raw_text):
             print(f"Raw Text Received: {raw_text}")
             message_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
             data = {"type": "message",  "content": raw_text,  "message_id": message_id}
             await manager.broadcast_json(data, room_id)
             return raw_text  # or process it as needed
-
         tts = AzureTTSService(
             api_key=os.getenv("AZURE_SPEECH_API_KEY"),
             region="eastus",
@@ -155,28 +138,72 @@ async def run_bot(room_url, token, bot_name, room_id):
        
         llm.register_function("Jotting_tool", writing_tool.get_main_function(
         ), start_callback=writing_tool.get_start_callback_function())
-
-        # llm.register_function("get_image", vision_tool.get_main_function(
-        # ), start_callback=vision_tool.get_start_callback_function())
-        tools = [
-            # vision_tool.get_function_definition(),
-            writing_tool.get_function_definition()
-            
-        ]
-
+        # vision_tool.main()
         messages = [
             {
                 "role": "system",
                 "content": agent_system_prompt
             },
         ]
-
+        tools = [
+            # vision_tool.get_function_definition(),
+            writing_tool.get_function_definition()
+            
+        ]
         context = OpenAILLMContext(messages, tools)
+        # Create the DailyTransport with the provided room URL, token, and bot name
+        transport = DailyTransport(
+            room_url,
+            token,
+            bot_name,
+            context,
+            DailyParams(
+                audio_out_enabled=True,
+                transcription_enabled=True,
+                vad_enabled=True,
+                vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.2))
+            )
+        )
+
+        # room_id = "test_room"
+
+        # async def my_callback(raw_text):
+        #     print(f"Raw Text Received: {raw_text}")
+        #     message_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+        #     data = {"type": "message",  "content": raw_text,  "message_id": message_id}
+        #     await manager.broadcast_json(data, room_id)
+        #     return raw_text  # or process it as needed
+
+        # tts = AzureTTSService(
+        #     api_key=os.getenv("AZURE_SPEECH_API_KEY"),
+        #     region="eastus",
+        #     voice="en-US-AvaMultilingualNeural", # en-US-AvaMultilingualNeural en-US-ShimmerMultilingualNeural
+        #     callback=my_callback
+        # )
+
+        # llm = AzureLLMService(
+        #     api_key=os.getenv("AZURE_CHATGPT_API_KEY"),
+        #     endpoint=os.getenv("AZURE_CHATGPT_ENDPOINT"),
+        #     model=os.getenv("AZURE_CHATGPT_MODEL"),
+        # )
+
+       
+        # llm.register_function("Jotting_tool", writing_tool.get_main_function(
+        # ), start_callback=writing_tool.get_start_callback_function())
+
+        # llm.register_function("get_image", vision_tool.get_main_function(
+        # ), start_callback=vision_tool.get_start_callback_function())
+        
+
+        
+
+        
         context_aggregator = llm.create_context_aggregator(context)
 
         image_requester = UserImageRequester()
         user_response = UserResponseAggregator()
-        vision_aggregator = VisionImageFrameAggregator()
+        # print(context, "context in server file")
+        vision_aggregator = VisionImageFrameAggregator(context)
 
         # @transport.event_handler("on_participant_updated")
         # async def on_participant_updated(transport, participant):

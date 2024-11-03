@@ -90,10 +90,11 @@ class ImageRawFrame(DataFrame):
     image: bytes
     size: Tuple[int, int]
     format: str | None
+    context: str | None
 
     def __str__(self):
         pts = format_pts(self.pts)
-        return f"{self.name}(pts: {pts}, size: {self.size}, format: {self.format})"
+        return f"{self.name}(pts: {pts}, size: {self.size}, format: {self.format}, context: {self.context})"
 
 
 @dataclass
@@ -131,7 +132,7 @@ class VisionImageRawFrame(InputImageRawFrame):
 
     def __str__(self):
         pts = format_pts(self.pts)
-        return f"{self.name}(pts: {pts}, text: [{self.text}], size: {self.size}, format: {self.format})"
+        return f"{self.name}(pts: {pts}, text: [{self.text}], size: {self.size}, format: {self.format}, context: {self.context})"
 
 
 @dataclass

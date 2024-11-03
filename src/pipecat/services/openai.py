@@ -46,7 +46,7 @@ from pipecat.processors.aggregators.openai_llm_context import (
 )
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.services.ai_services import ImageGenService, LLMService, TTSService
-
+from pipecat.processors.aggregators.vision_image_frame import upload_base64_to_cloudinary
 try:
     from openai import (
         NOT_GIVEN,
@@ -89,7 +89,7 @@ class OpenAIContextAggregatorPair:
 
     def assistant(self) -> "OpenAIAssistantContextAggregator":
         return self._assistant
-    
+
 
 class BaseOpenAILLMService(LLMService):
     """This is the base for all services that use the AsyncOpenAI client.
@@ -109,8 +109,10 @@ class BaseOpenAILLMService(LLMService):
             default_factory=lambda: NOT_GIVEN, ge=-2.0, le=2.0
         )
         seed: Optional[int] = Field(default_factory=lambda: NOT_GIVEN, ge=0)
-        temperature: Optional[float] = Field(default_factory=lambda: NOT_GIVEN, ge=0.0, le=2.0)
-        top_p: Optional[float] = Field(default_factory=lambda: NOT_GIVEN, ge=0.0, le=1.0)
+        temperature: Optional[float] = Field(
+            default_factory=lambda: NOT_GIVEN, ge=0.0, le=2.0)
+        top_p: Optional[float] = Field(
+            default_factory=lambda: NOT_GIVEN, ge=0.0, le=1.0)
         extra: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
     def __init__(
@@ -132,8 +134,9 @@ class BaseOpenAILLMService(LLMService):
             "extra": params.extra if isinstance(params.extra, dict) else {},
         }
         self.set_model_name(model)
-        self._client = self.create_client(api_key=api_key, base_url=base_url, **kwargs)
-    
+        self._client = self.create_client(
+            api_key=api_key, base_url=base_url, **kwargs)
+
     @staticmethod
     def create_context_aggregator(
         context: OpenAILLMContext, *, assistant_expect_stripped_words: bool = True
@@ -190,13 +193,34 @@ class BaseOpenAILLMService(LLMService):
         # base64 encode any images
         for message in messages:
             if message.get("mime_type") == "image/jpeg":
-                encoded_image = base64.b64encode(message["data"].getvalue()).decode("utf-8")
+                encoded_image = base64.b64encode(
+                    message["data"].getvalue()).decode("utf-8")
                 text = message["content"]
+                
+                credentials = {
+                'cloud_name': 'dmimllwek',
+                'api_key': '121719144122169',
+                'api_secret': '9dmbR6kUd52Pak2BOfZoBgnz6IQ'
+            }
+
+                result = upload_base64_to_cloudinary(
+                    base64_string=encoded_image, # Your raw base64 string
+                    **credentials
+                )
+                image_url = None
+                if result['success']:
+                    image_url = result['url']
+                    print(f"Upload successful! URL: {result['url']}")
+                    print(f"Time taken: {result['duration']} seconds")
+                else:
+                    image_url = f"data:image/jpeg;base64,{encoded_image}"
+                    print(f"Upload failed: {result['error']}")
+                    print(f"Time taken: {result['duration']} seconds")
                 message["content"] = [
                     {"type": "text", "text": text},
                     {
                         "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"},
+                        "image_url": {"url": image_url},
                     },
                 ]
                 del message["data"]
@@ -248,6 +272,7 @@ class BaseOpenAILLMService(LLMService):
                 # yield a frame containing the function name and the arguments.
 
                 tool_call = chunk.choices[0].delta.tool_calls[0]
+                print(tool_call, "calling tool")
                 if tool_call.index != func_idx:
                     functions_list.append(function_name)
                     arguments_list.append(arguments)
@@ -291,7 +316,8 @@ class BaseOpenAILLMService(LLMService):
                     )
                 else:
                     raise OpenAIUnhandledFunctionException(
-                        f"The LLM tried to call a function named '{function_name}', but there isn't a callback registered for that function."
+                        f"The LLM tried to call a function named '{
+                            function_name}', but there isn't a callback registered for that function."
                     )
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
@@ -303,7 +329,9 @@ class BaseOpenAILLMService(LLMService):
         elif isinstance(frame, LLMMessagesFrame):
             context = OpenAILLMContext.from_messages(frame.messages)
         elif isinstance(frame, VisionImageRawFrame):
-            context = OpenAILLMContext.from_image_frame(frame)
+            messages = frame.context.get_messages()
+            context = OpenAILLMContext.from_image_frame(frame, messages)
+
         elif isinstance(frame, LLMUpdateSettingsFrame):
             await self._update_settings(frame.settings)
         else:
@@ -317,9 +345,6 @@ class BaseOpenAILLMService(LLMService):
             await self.push_frame(LLMFullResponseEndFrame())
 
 
-
-
-
 class OpenAILLMService(BaseOpenAILLMService):
     def __init__(
         self,
@@ -329,8 +354,6 @@ class OpenAILLMService(BaseOpenAILLMService):
         **kwargs,
     ):
         super().__init__(model=model, params=params, **kwargs)
-
-    
 
 
 class OpenAIImageGenService(ImageGenService):
@@ -366,7 +389,8 @@ class OpenAIImageGenService(ImageGenService):
         async with self._aiohttp_session.get(image_url) as response:
             image_stream = io.BytesIO(await response.content.read())
             image = Image.open(image_stream)
-            frame = URLImageRawFrame(image_url, image.tobytes(), image.size, image.format)
+            frame = URLImageRawFrame(
+                image_url, image.tobytes(), image.size, image.format)
             yield frame
 
 
@@ -421,10 +445,12 @@ class OpenAITTSService(TTSService):
                 if r.status_code != 200:
                     error = await r.text()
                     logger.error(
-                        f"{self} error getting audio (status: {r.status_code}, error: {error})"
+                        f"{self} error getting audio (status: {
+                            r.status_code}, error: {error})"
                     )
                     yield ErrorFrame(
-                        f"Error getting audio (status: {r.status_code}, error: {error})"
+                        f"Error getting audio (status: {
+                            r.status_code}, error: {error})"
                     )
                     return
 
@@ -434,7 +460,8 @@ class OpenAITTSService(TTSService):
                 async for chunk in r.iter_bytes(8192):
                     if len(chunk) > 0:
                         await self.stop_ttfb_metrics()
-                        frame = TTSAudioRawFrame(chunk, self._settings["sample_rate"], 1)
+                        frame = TTSAudioRawFrame(
+                            chunk, self._settings["sample_rate"], 1)
                         yield frame
                 yield TTSStoppedFrame()
         except BadRequestError as e:
@@ -466,7 +493,8 @@ class OpenAIUserContextAggregator(LLMUserContextAggregator):
                         self._context._user_image_request_context[frame.user_id] = frame.context
                     else:
                         logger.error(
-                            f"Unexpected UserImageRequestFrame context type: {type(frame.context)}"
+                            f"Unexpected UserImageRequestFrame context type: {
+                                type(frame.context)}"
                         )
                         del self._context._user_image_request_context[frame.user_id]
                 else:
@@ -476,10 +504,12 @@ class OpenAIUserContextAggregator(LLMUserContextAggregator):
                 # Push a new AnthropicImageMessageFrame with the text context we cached
                 # downstream to be handled by our assistant context aggregator. This is
                 # necessary so that we add the message to the context in the right order.
-                text = self._context._user_image_request_context.get(frame.user_id) or ""
+                text = self._context._user_image_request_context.get(
+                    frame.user_id) or ""
                 if text:
                     del self._context._user_image_request_context[frame.user_id]
-                frame = OpenAIImageMessageFrame(user_image_raw_frame=frame, text=text)
+                frame = OpenAIImageMessageFrame(
+                    user_image_raw_frame=frame, text=text)
                 await self.push_frame(frame)
         except Exception as e:
             logger.error(f"Error processing frame: {e}")
@@ -557,7 +587,8 @@ class OpenAIAssistantContextAggregator(LLMAssistantContextAggregator):
                     # Only run the LLM if there are no more function calls in progress.
                     run_llm = not bool(self._function_calls_in_progress)
             else:
-                self._context.add_message({"role": "assistant", "content": aggregation})
+                self._context.add_message(
+                    {"role": "assistant", "content": aggregation})
 
             if self._pending_image_frame_message:
                 frame = self._pending_image_frame_message

@@ -384,6 +384,7 @@ class AnthropicLLMContext(OpenAILLMContext):
         self.add_message({"role": "user", "content": content})
 
     def add_message(self, message):
+        
         try:
             if self.messages:
                 # Anthropic requires that roles alternate. If this message's role is the same as the

@@ -53,7 +53,7 @@ class WritingTool(BaseTool):
 
         # Override the main_function with specific logic for stock data
         async def tool_function(function_name, tool_call_id, args, llm, context, result_callback):
-            print(context, args['text'], self.room_id)
+            print( args['text'], self.room_id, "calling")
             message_id = ''.join(random.choices(
                 string.ascii_letters + string.digits, k=8))
 
