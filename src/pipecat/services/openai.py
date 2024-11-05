@@ -15,6 +15,7 @@ import httpx
 from loguru import logger
 from PIL import Image
 from pydantic import BaseModel, Field
+import os
 
 from pipecat.frames.frames import (
     ErrorFrame,
@@ -196,15 +197,15 @@ class BaseOpenAILLMService(LLMService):
                 encoded_image = base64.b64encode(
                     message["data"].getvalue()).decode("utf-8")
                 text = message["content"]
-                
+
                 credentials = {
-                'cloud_name': 'dmimllwek',
-                'api_key': '121719144122169',
-                'api_secret': '9dmbR6kUd52Pak2BOfZoBgnz6IQ'
-            }
+                    'cloud_name': os.getenv("CLOUDINARY_CLOUD_NAME"),
+                    'api_key': os.getenv("CLOUDINARY_API_KEY"),
+                    'api_secret': os.getenv("CLOUDINARY_API_SECRET")
+                }
 
                 result = upload_base64_to_cloudinary(
-                    base64_string=encoded_image, # Your raw base64 string
+                    base64_string=encoded_image,  # Your raw base64 string
                     **credentials
                 )
                 image_url = None

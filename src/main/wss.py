@@ -13,6 +13,7 @@ class ConnectionManager:
         # Ensure that init doesn't re-initialize on subsequent calls
         if not hasattr(self, "initialized"):
             self.active_connections: Dict[str, List[WebSocket]] = {}
+            self.use_video: Dict[str, bool] = {}  # Use a dictionary for video settings
             self.initialized = True
 
     async def connect(self, websocket: WebSocket, room_id: str):
@@ -26,6 +27,12 @@ class ConnectionManager:
             self.active_connections[room_id].remove(websocket)
             if len(self.active_connections[room_id]) == 0:
                 del self.active_connections[room_id]
+    
+    def set_use_video(self, use_video: bool, room_id: str):
+        self.use_video[room_id] = use_video
+    
+    def get_use_video(self, room_id: str) -> bool:
+        return self.use_video.get(room_id, False)  # Return False if room_id is not set
 
     async def send_personal_message(self, message: dict, websocket: WebSocket):
         await websocket.send_json(message)  # Send JSON instead of plain text

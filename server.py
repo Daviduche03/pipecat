@@ -66,6 +66,7 @@ app.add_middleware(
 
 manager = ConnectionManager()
 
+
 class RoomIdStore:
     _instance = None
 
@@ -75,8 +76,8 @@ class RoomIdStore:
             cls._instance.room_id = ""
         return cls._instance
 
-room_id_store = RoomIdStore()
 
+room_id_store = RoomIdStore()
 
 
 class MetricsLogger(FrameProcessor):
@@ -98,10 +99,10 @@ class UserImageRequester(FrameProcessor):
 
         if self._participant_id and isinstance(frame, TextFrame):
             await self.push_frame(
-                UserImageRequestFrame(self._participant_id), FrameDirection.UPSTREAM
+                UserImageRequestFrame(
+                    self._participant_id), FrameDirection.UPSTREAM
             )
         await self.push_frame(frame, direction)
-
 
 
 # Async function to handle bot logic, similar to main function
@@ -109,23 +110,29 @@ async def run_bot(room_url, token, bot_name, room_id):
     async with aiohttp.ClientSession() as session:
         (room_url, token) = await runner_config(session)
         # Initialize tools with room_id passed
-        
+
         writing_tool = WritingTool(room_id=room_id)
         # vision_tool = VisionTool(room_id=room_id)
-        
+
         # Run the main function of the tools
-        
+
         writing_tool.main()
+
         async def my_callback(raw_text):
             print(f"Raw Text Received: {raw_text}")
-            message_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-            data = {"type": "message",  "content": raw_text,  "message_id": message_id}
+            message_id = ''.join(random.choices(
+                string.ascii_letters + string.digits, k=8))
+            data = {"type": "message",  "content": raw_text,
+                    "message_id": message_id}
             await manager.broadcast_json(data, room_id)
             return raw_text  # or process it as needed
+        
+
         tts = AzureTTSService(
             api_key=os.getenv("AZURE_SPEECH_API_KEY"),
             region="eastus",
-            voice="en-US-AvaMultilingualNeural", # en-US-AvaMultilingualNeural en-US-ShimmerMultilingualNeural
+            # en-US-AvaMultilingualNeural en-US-ShimmerMultilingualNeural
+            voice="en-US-AvaMultilingualNeural",
             callback=my_callback
         )
 
@@ -135,7 +142,6 @@ async def run_bot(room_url, token, bot_name, room_id):
             model=os.getenv("AZURE_CHATGPT_MODEL"),
         )
 
-       
         llm.register_function("Jotting_tool", writing_tool.get_main_function(
         ), start_callback=writing_tool.get_start_callback_function())
         # vision_tool.main()
@@ -148,7 +154,7 @@ async def run_bot(room_url, token, bot_name, room_id):
         tools = [
             # vision_tool.get_function_definition(),
             writing_tool.get_function_definition()
-            
+
         ]
         context = OpenAILLMContext(messages, tools)
         # Create the DailyTransport with the provided room URL, token, and bot name
@@ -165,39 +171,6 @@ async def run_bot(room_url, token, bot_name, room_id):
             )
         )
 
-        # room_id = "test_room"
-
-        # async def my_callback(raw_text):
-        #     print(f"Raw Text Received: {raw_text}")
-        #     message_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-        #     data = {"type": "message",  "content": raw_text,  "message_id": message_id}
-        #     await manager.broadcast_json(data, room_id)
-        #     return raw_text  # or process it as needed
-
-        # tts = AzureTTSService(
-        #     api_key=os.getenv("AZURE_SPEECH_API_KEY"),
-        #     region="eastus",
-        #     voice="en-US-AvaMultilingualNeural", # en-US-AvaMultilingualNeural en-US-ShimmerMultilingualNeural
-        #     callback=my_callback
-        # )
-
-        # llm = AzureLLMService(
-        #     api_key=os.getenv("AZURE_CHATGPT_API_KEY"),
-        #     endpoint=os.getenv("AZURE_CHATGPT_ENDPOINT"),
-        #     model=os.getenv("AZURE_CHATGPT_MODEL"),
-        # )
-
-       
-        # llm.register_function("Jotting_tool", writing_tool.get_main_function(
-        # ), start_callback=writing_tool.get_start_callback_function())
-
-        # llm.register_function("get_image", vision_tool.get_main_function(
-        # ), start_callback=vision_tool.get_start_callback_function())
-        
-
-        
-
-        
         context_aggregator = llm.create_context_aggregator(context)
 
         image_requester = UserImageRequester()
@@ -216,11 +189,9 @@ async def run_bot(room_url, token, bot_name, room_id):
         #             participant["id"], framerate=0, video_source="screenVideo")
         #         image_requester.set_participant_id(participant["id"])
 
-
-        # Initialize the pipeline with all necessary components
-        pipeline = Pipeline([
+        pipeline_attributes = [
             transport.input(),
-            user_response,
+            # user_response,
             # context_aggregator.user(),
             image_requester,
             vision_aggregator,
@@ -229,7 +200,18 @@ async def run_bot(room_url, token, bot_name, room_id):
             MetricsLogger(),
             transport.output(),
             context_aggregator.assistant(),
-        ])
+        ]
+
+        use_video = manager.get_use_video(room_id=room_id)
+        print(use_video)
+        if (use_video):
+            
+            pipeline_attributes.insert(1, user_response)
+        else:
+            pipeline_attributes.insert(1, context_aggregator.user())
+
+        # Initialize the pipeline with all necessary components
+        pipeline = Pipeline(pipeline_attributes)
 
         task = PipelineTask(pipeline, PipelineParams(
             allow_interruptions=True,
@@ -248,7 +230,9 @@ async def run_bot(room_url, token, bot_name, room_id):
         # Event handler for first participant joining the room
         @transport.event_handler("on_first_participant_joined")
         async def on_first_participant_joined(transport, participant):
-            transport.capture_participant_video(participant["id"], framerate=0, video_source="screenVideo")
+            if use_video:
+                transport.capture_participant_video(
+                    participant["id"], framerate=0, video_source="screenVideo")
             transport.capture_participant_transcription(participant["id"])
             image_requester.set_participant_id(participant["id"])
             # participant_name = participant["info"]["userName"] or ""
@@ -290,7 +274,8 @@ async def start_bot(request: BotRequest):
             (room_url, token) = await configure(session)
 
         # Start the agent (run the bot asynchronously)
-        asyncio.create_task(run_bot(room_url, token, request.bot_name, "test_room"))
+        asyncio.create_task(
+            run_bot(room_url, token, request.bot_name, "test_room"))
 
         # Return the room URL and token
         return BotResponse(room_url=room_url, token=token)
@@ -312,7 +297,7 @@ async def configure_endpoint(request: ConfigRequest):
 
 @app.websocket("/ws/{user_room_id}")
 async def websocket_endpoint(websocket: WebSocket, user_room_id: str):
-    
+
     await manager.connect(websocket, user_room_id)
     print(user_room_id)
     room_id_store.room_id = user_room_id
@@ -320,7 +305,8 @@ async def websocket_endpoint(websocket: WebSocket, user_room_id: str):
         while True:
             data = await websocket.receive_text()
             print(data, user_room_id)
-            
+            manager.set_use_video(False)
+
             # This line is optional, depending on whether you want to echo back received messages
             await manager.broadcast(f"Message received: {data}", user_room_id)
     except WebSocketDisconnect:
